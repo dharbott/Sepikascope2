@@ -76,12 +76,15 @@ namespace ASCOM.Sepikascope2
         internal static string traceStateProfileName = "Trace Level";
         internal static string traceStateDefault = "false";
         
-        internal static string siteElevationProfileName = "SiteElevation";
+        internal static string siteElevationProfileName = "Elevation";
         internal static string siteElevationDefault = "263";
-        internal static string siteLatitudeProfileName = "SiteLatitude";
+        internal static string siteLatitudeProfileName = "Latitude";
         internal static string siteLatitudeDefault = "34.143930";
-        internal static string siteLongitudeProfileName = "SiteLongitude";
+        internal static string siteLongitudeProfileName = "Longitude";
         internal static string siteLongitudeDefault = "-118.120432";
+
+        internal static string canSlewAltAzDefault = "";
+
 
         internal static string comPort; // Variables to hold the currrent device configuration
         internal static bool traceState;
@@ -703,7 +706,8 @@ namespace ASCOM.Sepikascope2
         {
             get
             {
-                double siderealTime = (18.697374558 + 24.065709824419081 * (utilities.DateLocalToJulian(DateTime.Now) - 2451545.0)) % 24.0;
+                //double siderealTime = (18.697374558 + 24.065709824419081 * (utilities.DateLocalToJulian(DateTime.Now) - 2451545.0)) % 24.0;
+                double siderealTime = (18.697374558 + 24.065709824419081 * (utilities.DateLocalToJulian(DateTime.Now) - 2451545.0) + SiteLongitude / 15.0) % 24.0;
                 tl.LogMessage("SiderealTime", "Get - " + siderealTime.ToString());
                 return siderealTime;
             }
@@ -1050,7 +1054,14 @@ namespace ASCOM.Sepikascope2
                 //driverProfile.CreateSubKey(driverID, "Capabilities");
                 //driverProfile.WriteValue(driverID, "testName", "testValue");
                 //driverProfile.WriteValue(driverID, "SubkeytestName", "SubkeytestValue", "Capabilities");
-                driverProfile.GetValue(driverID, "SubkeytestName", "Capabilities", "SubkeytestValue");
+                //driverProfile.GetValue(driverID, "CanSlewAltAz", "Capabilities", CanSlewAltAz.ToString());
+                driverProfile.GetValue(driverID, siteElevationProfileName, string.Empty, siteElevationDefault);
+                driverProfile.GetValue(driverID, siteLatitudeProfileName, string.Empty, siteLatitudeDefault);
+                driverProfile.GetValue(driverID, siteLongitudeProfileName, string.Empty, siteLongitudeDefault);
+                driverProfile.GetValue(driverID, "CanSlewAltAz", "Capabilities", "false");
+                //driverProfile.GetValue(driverID, "CanSlewAltAz", "Capabilities", CanSlewAltAz.ToString());
+                //String tempstring = AlignmentMode.ToString();
+                driverProfile.GetValue(driverID, "AlignmentMode", string.Empty, "0");
             }
         }
 
