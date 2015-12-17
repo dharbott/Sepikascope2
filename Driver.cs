@@ -1047,6 +1047,10 @@ namespace ASCOM.Sepikascope2
                 driverProfile.DeviceType = "Telescope";
                 traceState = Convert.ToBoolean(driverProfile.GetValue(driverID, traceStateProfileName, string.Empty, traceStateDefault));
                 comPort = driverProfile.GetValue(driverID, comPortProfileName, string.Empty, comPortDefault);
+                //driverProfile.CreateSubKey(driverID, "Capabilities");
+                //driverProfile.WriteValue(driverID, "testName", "testValue");
+                //driverProfile.WriteValue(driverID, "SubkeytestName", "SubkeytestValue", "Capabilities");
+                driverProfile.GetValue(driverID, "SubkeytestName", "Capabilities", "SubkeytestValue");
             }
         }
 
