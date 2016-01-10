@@ -1,23 +1,21 @@
 //tabs=4
 // --------------------------------------------------------------------------------
-// TODO fill in this information for your driver, then remove this line!
 //
 // ASCOM Telescope driver for Sepikascope2
 //
-// Description:	Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam 
-//				nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam 
-//				erat, sed diam voluptua. At vero eos et accusam et justo duo 
-//				dolores et ea rebum. Stet clita kasd gubergren, no sea takimata 
-//				sanctus est Lorem ipsum dolor sit amet.
+// Description:	Version turned out to have bugs registering its library correctly. I do
+//              not know how to fix it, so I made a new driver, and copied much of the 
+//              code into this one. I am building it with the help of the Conform Tool.
 //
-// Implements:	ASCOM Telescope interface version: <To be completed by driver developer>
-// Author:		(XXX) Your N. Here <your@email.here>
+// Implements:	ASCOM Telescope interface version: 2.0.0
+// Author:		(DKH) David K. Harbottle <dharbott@gmail.com>
 //
 // Edit Log:
 //
 // Date			Who	Vers	Description
 // -----------	---	-----	-------------------------------------------------------
 // dd-mmm-yyyy	XXX	6.0.0	Initial edit, created from ASCOM driver template
+// 09-Jan-2016  DKH 2.0.0   2nd take on writing a driver, using the Conform Tool
 // --------------------------------------------------------------------------------
 //
 
@@ -94,6 +92,11 @@ namespace ASCOM.Sepikascope2
         internal static double siteLongitude = -118.120432;
 
         /// <summary>
+        /// Private variable to hold the Serial Object
+        /// </summary>
+        private ASCOM.Utilities.Serial objSerial;
+
+        /// <summary>
         /// Private variable to hold the connected state
         /// </summary>
         private bool connectedState;
@@ -112,6 +115,47 @@ namespace ASCOM.Sepikascope2
         /// Private variable to hold the trace logger object (creates a diagnostic log file with information that you specify)
         /// </summary>
         private TraceLogger tl;
+
+
+        // explicit function that converts a double floating point
+        // angular degree into arcminutes, and then rounded into
+        // a 16-bit integer, a 'short' in c#, and then converted
+        // into a string of 2 bytes, because 1 byte is 8 bits
+        private byte[] doubleToShortBytes(double param1)
+        {
+            short shortParam = Convert.ToInt16(param1 * 60.0);
+            byte[] byteArray = BitConverter.GetBytes(shortParam);
+            return byteArray;
+        }
+
+
+        public byte[] doubleToShortBytes(double param1, double param2)
+        {
+            byte[] byteArray1 = doubleToShortBytes(param1);
+            byte[] byteArray2 = doubleToShortBytes(param2);
+
+            byte[] output = new byte[byteArray1.Length + byteArray2.Length];
+
+            /** This stuff works too, and it is the fastest
+            byte[] output = new byte[8];
+            int outputIndex = 0;
+            for (int i = 0; i < 4; i++)
+            {
+                output[outputIndex] = byteArray1[i];
+                output[outputIndex + 4] = byteArray2[i];
+                outputIndex++;
+            }
+            **/
+
+            // the reality is that byteArray1 is only 2 bytes
+            // and output only becomes 4 bytes
+            // make a function that will accept any number of 2-byte arguments?
+            byteArray1.CopyTo(output, 0);
+            byteArray2.CopyTo(output, byteArray1.Length);
+
+            return output;
+        }
+
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Sepikascope2"/> class.
@@ -180,29 +224,117 @@ namespace ASCOM.Sepikascope2
         public void CommandBlind(string command, bool raw)
         {
             CheckConnected("CommandBlind");
+
+            if (raw == false) command += "~";
+            //number of characters to convert
+            int comlen = command.Length;
+
+            //convert command string into character array
+            char[] commandChars = command.ToCharArray();
+
+            //create byte array to fit bytes from character array
+            byte[] byteArray = new byte[1 + (comlen * 2)];
+
+            //convert each character to 2-byte, and copy the 2-byte into byteArray
+            for (int i = 0; i < comlen; i++)
+            {
+                (BitConverter.GetBytes(commandChars[i])).CopyTo(byteArray, 1 + (i * 2));
+            }
+            byteArray[0] = Convert.ToByte(byteArray.Length);
+            objSerial.TransmitBinary(byteArray);
+
+            //string retval = objSerial.ReceiveTerminated("~");
+            //retval = retval.Replace("~", "");
+            //return retval;
+
+            /***
+            CheckConnected("CommandBlind");
             // Call CommandString and return as soon as it finishes
             this.CommandString(command, raw);
             // or
             throw new ASCOM.MethodNotImplementedException("CommandBlind");
+             * ***/
         }
 
         public bool CommandBool(string command, bool raw)
         {
             CheckConnected("CommandBool");
+
+            if (raw == false) command += "~";
+
+            //number of characters to convert
+            int comlen = command.Length;
+
+            //convert command string into character array
+            char[] commandChars = command.ToCharArray();
+
+            //create byte array to fit bytes from character array
+            byte[] byteArray = new byte[1 + (comlen * 2)];
+
+            //convert each character to 2-byte, and copy the 2-byte into byteArray
+            for (int i = 0; i < comlen; i++)
+            {
+                (BitConverter.GetBytes(commandChars[i])).CopyTo(byteArray, 1 + (i * 2));
+            }
+            byteArray[0] = Convert.ToByte(byteArray.Length);
+            objSerial.TransmitBinary(byteArray);
+
+            string retval = objSerial.ReceiveTerminated("~");
+            retval = retval.Replace("~", "");
+
+            // TODO decode the return string and return true or false
+            // or
+            if (retval.Equals("true"))
+                return true;
+            else if (retval.Equals("false"))
+                return false;
+            else
+                throw new ASCOM.DriverException("CommandBool non boolean return");
+            /***
+            CheckConnected("CommandBool");
             string ret = CommandString(command, raw);
             // TODO decode the return string and return true or false
             // or
             throw new ASCOM.MethodNotImplementedException("CommandBool");
+             * ***/
         }
 
         public string CommandString(string command, bool raw)
         {
+            //StringInput -> CharArray -> ByteArray ##> TransmitBytes(...)
+            //NOTE: IT WORKS, but theres trouble using terminating characters
+
+            CheckConnected("CommandString");
+
+            if (raw == false) command += "~";
+            //number of characters to convert
+            int comlen = command.Length;
+
+            //convert command string into character array
+            char[] commandChars = command.ToCharArray();
+
+            //create byte array to fit bytes from character array
+            byte[] byteArray = new byte[1 + (comlen * 2)];
+
+            //convert each character to 2-byte, and copy the 2-byte into byteArray
+            for (int i = 0; i < comlen; i++)
+            {
+                (BitConverter.GetBytes(commandChars[i])).CopyTo(byteArray, 1 + (i * 2));
+            }
+            byteArray[0] = Convert.ToByte(byteArray.Length);
+            objSerial.TransmitBinary(byteArray);
+
+            string retval = objSerial.ReceiveTerminated("~");
+            retval = retval.Replace("~", "");
+            return retval;
+            /***
             CheckConnected("CommandString");
             // it's a good idea to put all the low level communication with the device here,
             // then all communication calls this function
             // you need something to ensure that only one command is in progress at a time
 
             throw new ASCOM.MethodNotImplementedException("CommandString");
+             * ***/
         }
 
         public void Dispose()
@@ -215,6 +347,8 @@ namespace ASCOM.Sepikascope2
             utilities = null;
             astroUtilities.Dispose();
             astroUtilities = null;
+            objSerial.Dispose();
+            objSerial = null;
         }
 
         public bool Connected
@@ -234,13 +368,18 @@ namespace ASCOM.Sepikascope2
                 {
                     connectedState = true;
                     tl.LogMessage("Connected Set", "Connecting to port " + comPort);
-                    // TODO connect to the device
+                    objSerial = new ASCOM.Utilities.Serial();
+                    objSerial.PortName = comPort;
+                    objSerial.Speed = SerialSpeed.ps19200;
+                    objSerial.Connected = true;
+
+                    System.Threading.Thread.Sleep(1000);
                 }
                 else
                 {
                     connectedState = false;
                     tl.LogMessage("Connected Set", "Disconnecting from port " + comPort);
-                    // TODO disconnect from the device
+                    objSerial.Connected = false;
                 }
             }
         }
@@ -292,7 +431,7 @@ namespace ASCOM.Sepikascope2
         {
             get
             {
-                string name = "Short driver name - please customise";
+                string name = "SepikascopeV2";
                 tl.LogMessage("Name Get", name);
                 return name;
             }
@@ -311,8 +450,10 @@ namespace ASCOM.Sepikascope2
         {
             get
             {
-                tl.LogMessage("AlignmentMode Get", "Not implemented");
-                throw new ASCOM.PropertyNotImplementedException("AlignmentMode", false);
+                //tl.LogMessage("AlignmentMode Get", "Not implemented");
+                //throw new ASCOM.PropertyNotImplementedException("AlignmentMode", false);
+                tl.LogMessage("AlignmentMode Get", "Implemented");
+                return AlignmentModes.algAltAz;
             }
         }
 
@@ -320,8 +461,13 @@ namespace ASCOM.Sepikascope2
         {
             get
             {
-                tl.LogMessage("Altitude", "Not implemented");
-                throw new ASCOM.PropertyNotImplementedException("Altitude", false);
+                //tl.LogMessage("Altitude Get", "Not implemented");
+                //throw new ASCOM.PropertyNotImplementedException("Altitude", false);
+                tl.LogMessage("Altitude Get", "Implemented");
+
+                string outputString = "311~";
+                string retval = CommandString(outputString, true);
+                return (Convert.ToDouble(retval));
             }
         }
 
@@ -329,8 +475,9 @@ namespace ASCOM.Sepikascope2
         {
             get
             {
-                tl.LogMessage("ApertureArea Get", "Not implemented");
-                throw new ASCOM.PropertyNotImplementedException("ApertureArea", false);
+                tl.LogMessage("ApertureArea Get", "Implemented");
+                //throw new ASCOM.PropertyNotImplementedException("ApertureArea", false);
+                return (((ApertureDiameter * ApertureDiameter) / 4.0) * Math.PI);
             }
         }
 
@@ -338,8 +485,12 @@ namespace ASCOM.Sepikascope2
         {
             get
             {
-                tl.LogMessage("ApertureDiameter Get", "Not implemented");
-                throw new ASCOM.PropertyNotImplementedException("ApertureDiameter", false);
+                tl.LogMessage("ApertureDiameter Get", "Implemented");
+                //throw new ASCOM.PropertyNotImplementedException("ApertureDiameter", false);
+                //SkyQuest XT6 Dobsonian Reflector Telescope
+                //Parabolic Primary Optics
+                //Diameter 150mm, Focal Length 1200mm, focal ratio f/8
+                return 0.150;
             }
         }
 
@@ -371,8 +522,13 @@ namespace ASCOM.Sepikascope2
         {
             get
             {
-                tl.LogMessage("Azimuth Get", "Not implemented");
-                throw new ASCOM.PropertyNotImplementedException("Azimuth", false);
+                //tl.LogMessage("Azimuth Get", "Not implemented");
+                //throw new ASCOM.PropertyNotImplementedException("Azimuth", false);
+                tl.LogMessage("Azimuth Get", "Implemented");
+
+                string outputString = "211~";
+                string retval = CommandString(outputString, true);
+                return (Convert.ToDouble(retval));
             }
         }
 
@@ -385,6 +541,8 @@ namespace ASCOM.Sepikascope2
             }
         }
 
+
+        //IN PROGRESS
         public bool CanMoveAxis(TelescopeAxes Axis)
         {
             tl.LogMessage("CanMoveAxis", "Get - " + Axis.ToString());
@@ -478,12 +636,13 @@ namespace ASCOM.Sepikascope2
             }
         }
 
+
         public bool CanSlewAltAz
         {
             get
             {
                 tl.LogMessage("CanSlewAltAz", "Get - " + false.ToString());
-                return false;
+                return true;
             }
         }
 
@@ -597,8 +756,13 @@ namespace ASCOM.Sepikascope2
         {
             get
             {
-                tl.LogMessage("FocalLength Get", "Not implemented");
-                throw new ASCOM.PropertyNotImplementedException("FocalLength", false);
+                //tl.LogMessage("FocalLength Get", "Not implemented");
+                //throw new ASCOM.PropertyNotImplementedException("FocalLength", false);
+                tl.LogMessage("FocalLength Get", "Implemented");
+                //SkyQuest XT6 Dobsonian Reflector Telescope
+                //Parabolic Primary Optics
+                //Diameter 150mm, Focal Length 1200mm, focal ratio f/8
+                return 1.200;
             }
         }
 
@@ -782,17 +946,89 @@ namespace ASCOM.Sepikascope2
             }
         }
 
+
+        // double -> byteArray -> charArray -> string??
+        public void SlewToAltAz(double Azimuth, double Altitude)
+        {
+            //tl.LogMessage("SlewToAltAz", "Not implemented");
+            //throw new ASCOM.MethodNotImplementedException("SlewToAltAz");
+
+            tl.LogMessage("SlewToAltAz", "Implemented");
+
+            string stringOutgoing = "1";
+            string stringIncoming = "";
+
+            if (((Azimuth < 0.0) || (Azimuth > 360.0)) || ((Altitude < 0.0) || (Altitude > 90.0)))
+                throw new ASCOM.InvalidValueException("SlewToAltAz: Value out of range;");
+
+            byte[] paramBytes = doubleToShortBytes(Azimuth, Altitude);
+
+            //converts from 2 bytes, into unicode 16bit, thus 2 byte
+            //converts one character at a time
+            for (int i = 0; i < paramBytes.Length; i = i + 2)
+                stringOutgoing += BitConverter.ToChar(paramBytes, i);
+
+            stringOutgoing += "~";
+
+            //slewing may take some time to achieve, maybe 3 minutes?
+            //we're waiting for confirmation from the Arduino
+            objSerial.ReceiveTimeout = 120;
+
+            stringIncoming = CommandString(stringOutgoing, true);
+
+            objSerial.ReceiveTimeout = 5;
+
+            //CommandString function strips the terminating char ';' from the return string
+            if (stringIncoming.Equals("Slewing Operation Finished"))
+            {
+
+            }
+            else if (stringIncoming.Contains("Altitude Limit Switch Triggered"))
+                throw new ASCOM.InvalidValueException("Altitude Limit Switch Triggered;");
+            else
+                throw new ASCOM.DriverException("SlewToAltAz - Fail;");
+        }
+        /***
         public void SlewToAltAz(double Azimuth, double Altitude)
         {
             tl.LogMessage("SlewToAltAz", "Not implemented");
             throw new ASCOM.MethodNotImplementedException("SlewToAltAz");
         }
+         ***/
 
+
+        public void SlewToAltAzAsync(double Azimuth, double Altitude)
+        {
+            //tl.LogMessage("SlewToAltAzAsync", "Not implemented");
+            //throw new ASCOM.MethodNotImplementedException("SlewToAltAzAsync");
+            tl.LogMessage("SlewToAltAzAsync", "Implemented");
+
+            string stringOutgoing = "8";
+            string stringIncoming = "";
+
+            if (((Azimuth < 0.0) || (Azimuth > 360.0)) || ((Altitude < 0.0) || (Altitude > 360.0)))
+                throw new ASCOM.InvalidValueException("SlewToAltAzAsync: Value out of range;");
+
+            byte[] paramBytes = doubleToShortBytes(Azimuth, Altitude);
+
+            for (int i = 0; i < paramBytes.Length; i = i + 2)
+                stringOutgoing += BitConverter.ToChar(paramBytes, i);
+
+            stringOutgoing += "~";
+
+            stringIncoming = CommandString(stringOutgoing, true);
+
+            if (!stringIncoming.Equals("Slewing Async Started"))
+                throw new ASCOM.DriverException("SlewToAltAzAsync - Fail;");
+        }
+        /***
         public void SlewToAltAzAsync(double Azimuth, double Altitude)
         {
             tl.LogMessage("SlewToAltAzAsync", "Not implemented");
             throw new ASCOM.MethodNotImplementedException("SlewToAltAzAsync");
         }
+        ***/
+
 
         public void SlewToCoordinates(double RightAscension, double Declination)
         {
@@ -822,16 +1058,54 @@ namespace ASCOM.Sepikascope2
         {
             get
             {
-                tl.LogMessage("Slewing Get", "Not implemented");
-                throw new ASCOM.PropertyNotImplementedException("Slewing", false);
+                //tl.LogMessage("Slewing Get", "Not implemented");
+                //throw new ASCOM.PropertyNotImplementedException("Slewing", false);
+                tl.LogMessage("Slewing Get", "Implemented");
+
+                string stringOutgoing = "0";
+                stringOutgoing += "~";
+
+                return CommandBool(stringOutgoing, true);
             }
         }
 
+
+        public void SyncToAltAz(double Azimuth, double Altitude)
+        {
+            //tl.LogMessage("SyncToAltAz", "Not implemented");
+            //throw new ASCOM.MethodNotImplementedException("SyncToAltAz");
+            tl.LogMessage("SyncToAltAz", "Implemented");
+
+            string stringOutgoing = "7";
+            string stringIncoming = "";
+
+            if (((Azimuth < 0.0) || (Azimuth > 360.0)) || ((Altitude < 0.0) || (Altitude > 360.0)))
+                throw new ASCOM.InvalidValueException("SyncToAltAz: Value out of range;");
+
+            byte[] paramBytes = doubleToShortBytes(Azimuth, Altitude);
+
+            //converts from 2 bytes, into unicode 16bit, thus 2 byte
+            //converts one character at a time
+            for (int i = 0; i < paramBytes.Length; i = i + 2)
+            {
+                stringOutgoing += BitConverter.ToChar(paramBytes, i);
+            }
+
+            stringOutgoing += "~";
+
+            stringIncoming = CommandString(stringOutgoing, true);
+
+            if (!stringIncoming.Equals("SyncToAltAz Complete"))
+                throw new ASCOM.DriverException("SyncToAltAz - Fail;");
+        }
+        /***
         public void SyncToAltAz(double Azimuth, double Altitude)
         {
             tl.LogMessage("SyncToAltAz", "Not implemented");
             throw new ASCOM.MethodNotImplementedException("SyncToAltAz");
         }
+        ***/
+
 
         public void SyncToCoordinates(double RightAscension, double Declination)
         {
@@ -877,7 +1151,7 @@ namespace ASCOM.Sepikascope2
         {
             get
             {
-                bool tracking = true;
+                bool tracking = false;
                 tl.LogMessage("Tracking", "Get - " + tracking.ToString());
                 return tracking;
             }
@@ -1075,6 +1349,7 @@ namespace ASCOM.Sepikascope2
                 driverProfile.DeviceType = "Telescope";
                 driverProfile.WriteValue(driverID, traceStateProfileName, traceState.ToString());
                 driverProfile.WriteValue(driverID, comPortProfileName, comPort.ToString());
+                driverProfile.CreateSubKey(driverID, "Capabilities");
             }
         }
 
