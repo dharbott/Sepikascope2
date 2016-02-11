@@ -117,6 +117,8 @@ namespace ASCOM.Sepikascope2
         private TraceLogger tl;
 
 
+        public ArrayList actionsArrayList;
+
         // explicit function that converts a double floating point
         // angular degree into arcminutes, and then rounded into
         // a 16-bit integer, a 'short' in c#, and then converted
@@ -211,8 +213,10 @@ namespace ASCOM.Sepikascope2
         {
             get
             {
-                tl.LogMessage("SupportedActions Get", "Returning empty arraylist");
-                return new ArrayList();
+                //tl.LogMessage("SupportedActions Get", "Returning empty arraylist");
+                //return new ArrayList();
+                tl.LogMessage("SupportedActions Get", "Returning Actions arrayList");
+                return actionsArrayList;
             }
         }
 
@@ -631,8 +635,8 @@ namespace ASCOM.Sepikascope2
         {
             get
             {
-                tl.LogMessage("CanSlew", "Get - " + false.ToString());
-                return false;
+                tl.LogMessage("CanSlew", "Get - " + true.ToString());
+                return true;
             }
         }
 
@@ -641,7 +645,7 @@ namespace ASCOM.Sepikascope2
         {
             get
             {
-                tl.LogMessage("CanSlewAltAz", "Get - " + false.ToString());
+                tl.LogMessage("CanSlewAltAz", "Get - " + true.ToString());
                 return true;
             }
         }
@@ -805,8 +809,13 @@ namespace ASCOM.Sepikascope2
 
         public void MoveAxis(TelescopeAxes Axis, double Rate)
         {
+            /**
             tl.LogMessage("MoveAxis", "Not implemented");
             throw new ASCOM.MethodNotImplementedException("MoveAxis");
+             **/
+            tl.LogMessage("MoveAxis", "Implemented");
+            //throw new ASCOM.MethodNotImplementedException("MoveAxis");
+            
         }
 
         public void Park()
